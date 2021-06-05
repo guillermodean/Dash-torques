@@ -44,12 +44,10 @@ df = df.rename(
     columns={"Result number": "Result_number", "Pset ID": "Pset_ID", "Step ID": "Step_ID", "Torque min": "Torque_min",
              "Torque max": "Torque_max", "Angle min": "Angle_min", "Angle max": "Angle_max",
              "Controller serial no.": "Controller_serial_no.", "Pset name": "Pset_name",
-             'Controller name': 'Controller_name', 'Error code': 'Error_code', 'Result_status': 'Result_status'})
+             'Controller name': 'Controller_name', 'Error code': 'Error_code', 'Result status': 'Result_status'})
 df = df[~df["Pset_name"].str.contains("Poka", na=False)]
 df.astype({'Time result': 'datetime64[ns, US/Eastern]'}).dtypes
 df.reset_index(inplace=True)
-dropdown = list(df['Controller_name'])
-
 
 
 # ----------------------------------------------------------------------------
@@ -67,6 +65,13 @@ def generate_table(dataframe, max_rows=10):
     )
 
 
+def generate_nok(dataframe):
+    dataframe = dataframe[['Result_status', 'Result_number']].groupby(by='Result_status').count()
+    print(dataframe)
+    fig = px.pie(dataframe, names='Result_number', values='', title='% of torques not ok filtered by pset')
+    return fig
+
+
 app = dash.Dash(__name__, external_scripts=external_scripts,
                 external_stylesheets=external_stylesheets)
 
@@ -75,20 +80,33 @@ app.layout = html.Div(children=[
     dcc.Dropdown(id='dropdown', options=[
         {'label': str(i), 'value': str(i)} for i in df['Pset_name'].unique()
     ], multi=True, placeholder='Filter by Pset...'),
+    dcc.Graph(id='general_nok'),
+    html.Br(),
     html.Div(id='table-container')
 ])
 
 
 @app.callback(
-    dash.dependencies.Output('table-container', 'children'),
-    [dash.dependencies.Input('dropdown', 'value')])
+    Output(component_id='table-container', component_property='children'),
+    Input(component_id='dropdown', component_property='value'))
 def display_table(dropdown_value):
     if dropdown_value is None:
         return generate_table(df)
     else:
-        dff = df[df['Pset_name'].str.contains('|'.join(dropdown_value),na=False)]
-        print (dff.info())
+        dff = df[df['Pset_name'].str.contains('|'.join(dropdown_value), na=False)]
         return generate_table(dff)
+
+
+@app.callback(
+    Output(component_id='general_nok', component_property='figure'),
+    Input(component_id='dropdown', component_property='value'))
+def display_nok_graph(dropdown_value):
+    if dropdown_value is None:
+        return generate_nok(df)
+    else:
+        dff = df[df['Pset_name'].str.contains('|'.join(dropdown_value), na=False)]
+        return generate_table(dff)
+    return generate_nok(dff)
 
 
 if __name__ == '__main__':
